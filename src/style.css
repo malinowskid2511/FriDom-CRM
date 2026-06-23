@@ -1,0 +1,310 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-black: #000000;
+  --color-brand-white: #ffffff;
+  --color-brand-gray: #f5f5f5;
+  --font-sans: "Jost", ui-sans-serif, system-ui, sans-serif;
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-brand-gray text-brand-black font-sans antialiased;
+}
+
+/* Scroll reveal */
+.reveal {
+  opacity: 0;
+  transition:
+    opacity 0.85s var(--ease-out-expo),
+    transform 0.85s var(--ease-out-expo);
+  will-change: opacity, transform;
+}
+
+.reveal-from-up {
+  transform: translateY(52px);
+}
+
+.reveal-from-down {
+  transform: translateY(-40px);
+}
+
+.reveal-from-left {
+  transform: translateX(-56px);
+}
+
+.reveal-from-right {
+  transform: translateX(56px);
+}
+
+.reveal--visible {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* Hero entrance */
+@keyframes sketch-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Three.js sketch — soft edge blend into hero background */
+.sketch-scene-blend {
+  overflow: visible;
+  -webkit-mask-image: radial-gradient(
+    ellipse 78% 72% at 50% 46%,
+    #000 0%,
+    #000 38%,
+    rgba(0, 0, 0, 0.82) 54%,
+    rgba(0, 0, 0, 0.45) 68%,
+    rgba(0, 0, 0, 0.15) 82%,
+    transparent 96%
+  );
+  mask-image: radial-gradient(
+    ellipse 78% 72% at 50% 46%,
+    #000 0%,
+    #000 38%,
+    rgba(0, 0, 0, 0.82) 54%,
+    rgba(0, 0, 0, 0.45) 68%,
+    rgba(0, 0, 0, 0.15) 82%,
+    transparent 96%
+  );
+  -webkit-mask-mode: alpha;
+  mask-mode: alpha;
+}
+
+.sketch-scene__overlay {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.014) 2px,
+      rgba(255, 255, 255, 0.014) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 18px,
+      rgba(255, 255, 255, 0.007) 18px,
+      rgba(255, 255, 255, 0.007) 19px
+    );
+}
+
+.sketch-scene-wrap {
+  position: relative;
+  animation: sketch-drift 9s ease-in-out infinite;
+}
+
+.sketch-scene-wrap--static {
+  animation: none;
+}
+
+.sketch-scene-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 58% 52% at 50% 44%,
+    rgba(255, 255, 255, 0.018) 0%,
+    rgba(255, 255, 255, 0.006) 42%,
+    transparent 68%
+  );
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes line-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.85s var(--ease-out-expo) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.7s var(--ease-out-expo) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 1s var(--ease-out-expo) both;
+}
+
+.animate-float {
+  animation: float-gentle 5s ease-in-out infinite;
+}
+
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+.animate-delay-600 { animation-delay: 600ms; }
+
+/* Decorative hero line */
+.hero-line {
+  transform-origin: left;
+  animation: line-grow 0.9s var(--ease-out-expo) 0.3s both;
+}
+
+/* Interactive cards */
+.hover-lift {
+  transition:
+    transform 0.35s var(--ease-out-expo),
+    box-shadow 0.35s var(--ease-out-expo);
+}
+
+.hover-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 6px 6px 0 var(--color-brand-black);
+}
+
+/* Nav links */
+.nav-link {
+  position: relative;
+  transition: color 0.25s ease;
+}
+
+.nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s var(--ease-out-expo);
+}
+
+.nav-link:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.nav-link--active::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 0.3s var(--ease-out-expo),
+    transform 0.3s var(--ease-out-expo);
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.page-enter-to,
+.page-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Landing intro → content */
+.landing-intro {
+  isolation: isolate;
+}
+
+/* Button press */
+.btn-press {
+  transition: transform 0.2s var(--ease-out-expo);
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Stagger children — runs when parent scroll-reveal is visible */
+.reveal--visible .stagger-children > * {
+  opacity: 0;
+  animation: fade-up 0.7s var(--ease-out-expo) both;
+}
+
+.reveal--visible .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.reveal--visible .stagger-children > *:nth-child(2) { animation-delay: 80ms; }
+.reveal--visible .stagger-children > *:nth-child(3) { animation-delay: 160ms; }
+.reveal--visible .stagger-children > *:nth-child(4) { animation-delay: 240ms; }
+.reveal--visible .stagger-children > *:nth-child(5) { animation-delay: 320ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal,
+  .reveal-from-up,
+  .reveal-from-down,
+  .reveal-from-left,
+  .reveal-from-right {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-float,
+  .hero-line,
+  .sketch-scene-wrap,
+  .reveal--visible .stagger-children > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .hover-lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .page-enter-active,
+  .page-leave-active {
+    transition: none;
+  }
+}
