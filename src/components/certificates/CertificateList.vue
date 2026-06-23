@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Certificate } from '@/types'
+import type { Certificate, PaymentStatus } from '@/types'
+import { PAYMENT_STATUS_LABELS } from '@/types'
 import { formatCost } from '@/lib/format'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
@@ -12,6 +13,8 @@ defineEmits<{
   add: []
   download: [cert: Certificate]
   editCost: [cert: Certificate]
+  togglePayment: [cert: Certificate]
+  markPdfSent: [cert: Certificate]
   delete: [cert: Certificate]
 }>()
 
@@ -20,12 +23,29 @@ function formatDate(date: string | null) {
   return new Date(date).toLocaleDateString('pl-PL')
 }
 
+function formatDateTime(date: string | null) {
+  if (!date) return '—'
+  return new Date(date).toLocaleString('pl-PL', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function isExpiringSoon(expiryDate: string | null) {
   if (!expiryDate) return false
   const expiry = new Date(expiryDate)
   const now = new Date()
   const diff = expiry.getTime() - now.getTime()
   return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000
+}
+
+function paymentBadgeClass(status: PaymentStatus) {
+  return status === 'paid'
+    ? 'border-green-700 text-green-800 bg-green-50'
+    : 'border-amber-600 text-amber-800 bg-amber-50'
 }
 </script>
 
@@ -59,6 +79,9 @@ function isExpiringSoon(expiryDate: string | null) {
           <span class="border border-brand-black px-2 py-0.5">
             Koszt: {{ formatCost(cert.cost) }}
           </span>
+          <span class="border px-2 py-0.5" :class="paymentBadgeClass(cert.payment_status)">
+            {{ PAYMENT_STATUS_LABELS[cert.payment_status] }}
+          </span>
           <span
             v-if="isExpiringSoon(cert.expiry_date)"
             class="border border-amber-600 text-amber-700 px-2 py-0.5"
@@ -69,7 +92,21 @@ function isExpiringSoon(expiryDate: string | null) {
         <p class="text-sm text-brand-black/70">
           Wydano: {{ formatDate(cert.issue_date) }} · Ważny do: {{ formatDate(cert.expiry_date) }}
         </p>
+        <p v-if="cert.pdf_sent_at" class="text-xs text-brand-black/60">
+          PDF wysłano: {{ formatDateTime(cert.pdf_sent_at) }}
+        </p>
         <div class="flex flex-wrap gap-2 pt-1">
+          <BaseButton size="sm" variant="secondary" @click="$emit('togglePayment', cert)">
+            {{ cert.payment_status === 'paid' ? 'Oznacz oczekującą' : 'Oznacz opłacone' }}
+          </BaseButton>
+          <BaseButton
+            v-if="cert.file_path && !cert.pdf_sent_at"
+            size="sm"
+            variant="secondary"
+            @click="$emit('markPdfSent', cert)"
+          >
+            Wysłano PDF
+          </BaseButton>
           <BaseButton size="sm" variant="secondary" @click="$emit('editCost', cert)">
             Koszt
           </BaseButton>
@@ -96,8 +133,10 @@ function isExpiringSoon(expiryDate: string | null) {
             <th class="text-left px-4 py-3 font-semibold">Budynek</th>
             <th class="text-left px-4 py-3 font-semibold">Klasa</th>
             <th class="text-left px-4 py-3 font-semibold">Koszt</th>
+            <th class="text-left px-4 py-3 font-semibold">Płatność</th>
             <th class="text-left px-4 py-3 font-semibold">Wydano</th>
             <th class="text-left px-4 py-3 font-semibold">Ważny do</th>
+            <th class="text-left px-4 py-3 font-semibold">PDF</th>
             <th class="text-left px-4 py-3 font-semibold">Akcje</th>
           </tr>
         </thead>
@@ -121,10 +160,32 @@ function isExpiringSoon(expiryDate: string | null) {
             </td>
             <td class="px-4 py-3">{{ cert.energy_class ?? '—' }}</td>
             <td class="px-4 py-3 whitespace-nowrap">{{ formatCost(cert.cost) }}</td>
+            <td class="px-4 py-3">
+              <span
+                class="inline-block text-xs border px-2 py-0.5"
+                :class="paymentBadgeClass(cert.payment_status)"
+              >
+                {{ PAYMENT_STATUS_LABELS[cert.payment_status] }}
+              </span>
+            </td>
             <td class="px-4 py-3">{{ formatDate(cert.issue_date) }}</td>
             <td class="px-4 py-3">{{ formatDate(cert.expiry_date) }}</td>
+            <td class="px-4 py-3 text-xs text-brand-black/70 whitespace-nowrap">
+              {{ cert.pdf_sent_at ? formatDateTime(cert.pdf_sent_at) : '—' }}
+            </td>
             <td class="px-4 py-3">
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
+                <BaseButton size="sm" variant="ghost" @click="$emit('togglePayment', cert)">
+                  {{ cert.payment_status === 'paid' ? 'Nieopł.' : 'Opł.' }}
+                </BaseButton>
+                <BaseButton
+                  v-if="cert.file_path && !cert.pdf_sent_at"
+                  size="sm"
+                  variant="ghost"
+                  @click="$emit('markPdfSent', cert)"
+                >
+                  Wysłano
+                </BaseButton>
                 <BaseButton size="sm" variant="ghost" @click="$emit('editCost', cert)">
                   Koszt
                 </BaseButton>

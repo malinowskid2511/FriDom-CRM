@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import type { Building, BuildingMaterial } from '@/types'
+import type { Building, BuildingMaterial, ChecklistItem } from '@/types'
 import { BUILDING_TYPE_LABELS } from '@/types'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import MaterialChecklist from '@/components/buildings/MaterialChecklist.vue'
 
 defineProps<{
   buildings: Building[]
   materialsByBuilding: Record<string, BuildingMaterial[]>
+  checklistItems: ChecklistItem[]
+  checklistLoading?: boolean
   loading?: boolean
 }>()
 
@@ -16,6 +19,8 @@ defineEmits<{
   'add-material': [building: Building]
   'download-material': [material: BuildingMaterial]
   'delete-material': [material: BuildingMaterial]
+  'toggle-checklist': [item: ChecklistItem]
+  'add-checklist': [buildingId: string, title: string]
 }>()
 
 function formatDate(date: string) {
@@ -68,9 +73,17 @@ function formatDate(date: string) {
           </div>
         </div>
 
+        <MaterialChecklist
+          :items="checklistItems"
+          :building-id="building.id"
+          :loading="checklistLoading"
+          @toggle="$emit('toggle-checklist', $event)"
+          @add="$emit('add-checklist', building.id, $event)"
+        />
+
         <div class="border-t border-brand-black/20 bg-brand-gray/50 px-4 py-4">
           <div class="flex items-center justify-between gap-3 mb-3">
-            <p class="text-sm font-medium">Materiały do świadectwa</p>
+            <p class="text-sm font-medium">Przesłane pliki</p>
             <BaseButton size="sm" @click="$emit('add-material', building)">
               Dodaj materiał
             </BaseButton>
@@ -80,7 +93,7 @@ function formatDate(date: string) {
             v-if="!(materialsByBuilding[building.id]?.length)"
             class="text-sm text-brand-black/60"
           >
-            Brak materiałów. Dodaj np. rzut budynku lub informacje ze spółdzielni.
+            Brak plików. Dodaj np. rzut budynku lub informacje ze spółdzielni.
           </p>
 
           <ul v-else class="space-y-2">

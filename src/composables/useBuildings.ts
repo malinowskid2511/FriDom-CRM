@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { demoMode } from '@/lib/config'
 import { demoStore } from '@/lib/demo-store'
+import { logActivity } from '@/lib/activity-log'
+import { defaultChecklistTitles } from '@/lib/checklist-defaults'
 import type { Building, BuildingFormData } from '@/types'
 
 export function useBuildings() {
@@ -31,8 +33,13 @@ export function useBuildings() {
     }
   }
 
-  async function createBuilding(clientId: string, form: BuildingFormData) {
+  async function createBuilding(
+    clientId: string,
+    form: BuildingFormData,
+    userId?: string | null,
+  ) {
     if (demoMode) return demoStore.createBuilding(clientId, form)
+
     const { data, error: createError } = await supabase
       .from('buildings')
       .insert({
@@ -44,10 +51,40 @@ export function useBuildings() {
       .select()
       .single()
     if (createError) throw new Error(createError.message)
-    return data as Building
+
+    const building = data as Building
+    const checklistRows = defaultChecklistTitles().map((title, index) => ({
+      building_id: building.id,
+      client_id: clientId,
+      title,
+      sort_order: index,
+    }))
+    await supabase.from('checklist_items').insert(checklistRows)
+
+    await logActivity({
+      clientId,
+      action: 'building_added',
+      description: `Dodano budynek: ${form.address.trim()}`,
+      userId,
+      entityId: building.id,
+    })
+    await logActivity({
+      clientId,
+      action: 'checklist_item_added',
+      description: `Utworzono checklistę materiałów (${checklistRows.length} pozycji)`,
+      userId,
+      entityId: building.id,
+    })
+
+    return building
   }
 
-  async function updateBuilding(id: string, form: BuildingFormData) {
+  async function updateBuilding(
+    id: string,
+    form: BuildingFormData,
+    clientId?: string,
+    userId?: string | null,
+  ) {
     if (demoMode) return demoStore.updateBuilding(id, form)
     const { data, error: updateError } = await supabase
       .from('buildings')
@@ -60,6 +97,17 @@ export function useBuildings() {
       .select()
       .single()
     if (updateError) throw new Error(updateError.message)
+
+    if (clientId) {
+      await logActivity({
+        clientId,
+        action: 'building_updated',
+        description: `Zaktualizowano budynek: ${form.address.trim()}`,
+        userId,
+        entityId: id,
+      })
+    }
+
     return data as Building
   }
 

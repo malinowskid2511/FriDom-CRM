@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { demoMode } from '@/lib/config'
 import { demoStore } from '@/lib/demo-store'
 import { resolveMimeType, validateBuildingMaterialFile } from '@/lib/file-upload'
+import { logActivity } from '@/lib/activity-log'
 import type { BuildingMaterial, BuildingMaterialFormData } from '@/types'
 
 export function useBuildingMaterials() {
@@ -98,6 +99,14 @@ export function useBuildingMaterials() {
       throw new Error(updateError.message)
     }
 
+    await logActivity({
+      clientId,
+      action: 'material_uploaded',
+      description: `Dodano materiał: ${title}`,
+      userId,
+      entityId: material.id,
+    })
+
     return updated as BuildingMaterial
   }
 
@@ -121,7 +130,7 @@ export function useBuildingMaterials() {
     link.click()
   }
 
-  async function deleteMaterial(material: BuildingMaterial) {
+  async function deleteMaterial(material: BuildingMaterial, userId?: string | null) {
     if (demoMode) return demoStore.deleteBuildingMaterial(material.id)
 
     if (material.file_path && material.file_path !== 'pending') {
@@ -134,6 +143,14 @@ export function useBuildingMaterials() {
       .eq('id', material.id)
 
     if (deleteError) throw new Error(deleteError.message)
+
+    await logActivity({
+      clientId: material.client_id,
+      action: 'material_deleted',
+      description: `Usunięto materiał: ${material.title}`,
+      userId,
+      entityId: material.id,
+    })
   }
 
   return {

@@ -2,6 +2,7 @@
 import { RouterLink } from 'vue-router'
 import type { Client } from '@/types'
 import { ROUTES } from '@/lib/routes'
+import OrderStatusBadge from '@/components/clients/OrderStatusBadge.vue'
 
 defineProps<{
   clients: Client[]
@@ -14,6 +15,7 @@ defineProps<{
       <thead>
         <tr class="border-b border-brand-black bg-brand-gray">
           <th class="text-left px-4 py-3 font-semibold">Nazwa</th>
+          <th class="text-left px-4 py-3 font-semibold">Status</th>
           <th class="text-left px-4 py-3 font-semibold">Telefon</th>
           <th class="text-left px-4 py-3 font-semibold">E-mail</th>
           <th class="text-left px-4 py-3 font-semibold">Aktualizacja</th>
@@ -29,6 +31,9 @@ defineProps<{
             <RouterLink :to="ROUTES.client(client.id)" class="font-medium hover:underline">
               {{ client.name }}
             </RouterLink>
+          </td>
+          <td class="px-4 py-3">
+            <OrderStatusBadge :status="client.order_status" />
           </td>
           <td class="px-4 py-3">{{ client.phone ?? '—' }}</td>
           <td class="px-4 py-3">{{ client.email ?? '—' }}</td>

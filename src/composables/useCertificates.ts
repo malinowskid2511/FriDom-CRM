@@ -4,7 +4,14 @@ import { demoMode } from '@/lib/config'
 import { demoStore } from '@/lib/demo-store'
 import { sumEarnings, yearsFromCertificates, type EarningsSummary } from '@/lib/earnings'
 import { parseCost } from '@/lib/format'
-import type { Certificate, CertificateFormData, RecentCertificate } from '@/types'
+import { logActivity } from '@/lib/activity-log'
+import type {
+  Certificate,
+  CertificateFormData,
+  PaymentStatus,
+  RecentCertificate,
+} from '@/types'
+import { PAYMENT_STATUS_LABELS } from '@/types'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -94,6 +101,15 @@ export function useCertificates() {
       throw new Error(updateError.message)
     }
 
+    const label = form.certificate_number.trim() || 'certyfikat'
+    await logActivity({
+      clientId,
+      action: 'certificate_uploaded',
+      description: `Dodano certyfikat ${label}`,
+      userId,
+      entityId: cert.id,
+    })
+
     return updated as Certificate
   }
 
@@ -118,7 +134,7 @@ export function useCertificates() {
     link.click()
   }
 
-  async function deleteCertificate(cert: Certificate) {
+  async function deleteCertificate(cert: Certificate, userId?: string | null) {
     if (demoMode) return demoStore.deleteCertificate(cert.id)
 
     if (cert.file_path) {
@@ -131,6 +147,15 @@ export function useCertificates() {
       .eq('id', cert.id)
 
     if (deleteError) throw new Error(deleteError.message)
+
+    const label = cert.certificate_number ?? 'certyfikat'
+    await logActivity({
+      clientId: cert.client_id,
+      action: 'certificate_deleted',
+      description: `Usunięto certyfikat ${label}`,
+      userId,
+      entityId: cert.id,
+    })
   }
 
   async function getCertificatesCount(): Promise<number> {
@@ -208,6 +233,60 @@ export function useCertificates() {
     return yearsFromCertificates(rows)
   }
 
+  async function updateCertificatePaymentStatus(
+    id: string,
+    paymentStatus: PaymentStatus,
+    userId?: string | null,
+  ) {
+    if (demoMode) return demoStore.updateCertificatePaymentStatus(id, paymentStatus, userId)
+
+    const { data, error: updateError } = await supabase
+      .from('certificates')
+      .update({ payment_status: paymentStatus })
+      .eq('id', id)
+      .select('*, building:buildings(*)')
+      .single()
+
+    if (updateError) throw new Error(updateError.message)
+
+    const cert = data as Certificate
+    await logActivity({
+      clientId: cert.client_id,
+      action: 'certificate_payment_changed',
+      description: `Płatność: ${PAYMENT_STATUS_LABELS[paymentStatus]}`,
+      userId,
+      entityId: id,
+    })
+
+    return cert
+  }
+
+  async function markCertificatePdfSent(id: string, userId?: string | null) {
+    if (demoMode) return demoStore.markCertificatePdfSent(id, userId)
+
+    const sentAt = new Date().toISOString()
+    const { data, error: updateError } = await supabase
+      .from('certificates')
+      .update({ pdf_sent_at: sentAt })
+      .eq('id', id)
+      .select('*, building:buildings(*)')
+      .single()
+
+    if (updateError) throw new Error(updateError.message)
+
+    const cert = data as Certificate
+    const label = cert.certificate_number ?? 'certyfikat'
+    await logActivity({
+      clientId: cert.client_id,
+      action: 'certificate_pdf_sent',
+      description: `Wysłano PDF certyfikatu ${label}`,
+      userId,
+      entityId: id,
+    })
+
+    return cert
+  }
+
   async function getExpiringCount(days = 90): Promise<number> {
     if (demoMode) return (await demoStore.getStats()).expiringCount
     const future = new Date()
@@ -237,6 +316,8 @@ export function useCertificates() {
     getExpiringCount,
     getRecentCertificates,
     updateCertificateCost,
+    updateCertificatePaymentStatus,
+    markCertificatePdfSent,
     getEarningsSummary,
     getEarningsYears,
   }

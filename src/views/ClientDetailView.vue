@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import AppShell from '@/components/layout/AppShell.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import OrderStatusSelect from '@/components/clients/OrderStatusSelect.vue'
+import OrderStatusBadge from '@/components/clients/OrderStatusBadge.vue'
+import ActivityTimeline from '@/components/clients/ActivityTimeline.vue'
 import BuildingList from '@/components/buildings/BuildingList.vue'
 import BuildingFormModal from '@/components/buildings/BuildingFormModal.vue'
 import BuildingMaterialModal from '@/components/buildings/BuildingMaterialModal.vue'
@@ -14,6 +17,8 @@ import { useClients } from '@/composables/useClients'
 import { useBuildings } from '@/composables/useBuildings'
 import { useBuildingMaterials } from '@/composables/useBuildingMaterials'
 import { useCertificates } from '@/composables/useCertificates'
+import { useChecklist } from '@/composables/useChecklist'
+import { useActivityLog } from '@/composables/useActivityLog'
 import { useAuthStore } from '@/stores/auth'
 import { ROUTES } from '@/lib/routes'
 import type {
@@ -23,7 +28,10 @@ import type {
   BuildingMaterialFormData,
   Certificate,
   CertificateFormData,
+  ChecklistItem,
   Client,
+  OrderStatus,
+  PaymentStatus,
 } from '@/types'
 
 const route = useRoute()
@@ -31,7 +39,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const clientId = route.params.id as string
 
-const { fetchClient, deleteClient } = useClients()
+const { fetchClient, deleteClient, updateOrderStatus } = useClients()
 const {
   buildings,
   loading: buildingsLoading,
@@ -55,11 +63,26 @@ const {
   downloadCertificate,
   deleteCertificate,
   updateCertificateCost,
+  updateCertificatePaymentStatus,
+  markCertificatePdfSent,
 } = useCertificates()
+const {
+  items: checklistItems,
+  loading: checklistLoading,
+  fetchChecklist,
+  addChecklistItem,
+  toggleChecklistItem,
+} = useChecklist()
+const {
+  entries: activityEntries,
+  loading: activityLoading,
+  fetchActivityLog,
+} = useActivityLog()
 
 const client = ref<Client | null>(null)
 const loading = ref(true)
-const activeTab = ref<'dane' | 'budynki' | 'certyfikaty'>('dane')
+const activeTab = ref<'dane' | 'budynki' | 'certyfikaty' | 'aktywnosc'>('dane')
+const statusSaving = ref(false)
 
 const buildingModalOpen = ref(false)
 const editingBuilding = ref<Building | null>(null)
@@ -80,6 +103,8 @@ onMounted(async () => {
     fetchBuildings(clientId),
     fetchCertificates(clientId),
     fetchMaterials(clientId),
+    fetchChecklist(clientId),
+    fetchActivityLog(clientId),
   ])
 })
 
@@ -92,6 +117,17 @@ const materialsByBuilding = computed(() => {
   return map
 })
 
+async function refreshClientData() {
+  await Promise.all([
+    fetchBuildings(clientId),
+    fetchCertificates(clientId),
+    fetchMaterials(clientId),
+    fetchChecklist(clientId),
+    fetchActivityLog(clientId),
+  ])
+  client.value = await fetchClient(clientId)
+}
+
 async function handleDeleteClient() {
   if (!client.value) return
   if (!confirm(`Czy na pewno usunąć klienta „${client.value.name}"?`)) return
@@ -100,6 +136,20 @@ async function handleDeleteClient() {
     router.push(ROUTES.clients)
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd usuwania'
+  }
+}
+
+async function handleOrderStatusChange(status: OrderStatus) {
+  if (!client.value || client.value.order_status === status) return
+  statusSaving.value = true
+  actionError.value = null
+  try {
+    client.value = await updateOrderStatus(clientId, status, auth.user?.id)
+    await fetchActivityLog(clientId)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Błąd zmiany statusu'
+  } finally {
+    statusSaving.value = false
   }
 }
 
@@ -117,12 +167,12 @@ async function handleSaveBuilding(data: BuildingFormData) {
   actionError.value = null
   try {
     if (editingBuilding.value) {
-      await updateBuilding(editingBuilding.value.id, data)
+      await updateBuilding(editingBuilding.value.id, data, clientId, auth.user?.id)
     } else {
-      await createBuilding(clientId, data)
+      await createBuilding(clientId, data, auth.user?.id)
     }
     buildingModalOpen.value = false
-    await fetchBuildings(clientId)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd zapisu budynku'
   }
@@ -132,9 +182,7 @@ async function handleDeleteBuilding(building: Building) {
   if (!confirm(`Usunąć budynek „${building.address}"?`)) return
   try {
     await deleteBuilding(building.id)
-    await fetchBuildings(clientId)
-    await fetchCertificates(clientId)
-    await fetchMaterials(clientId)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd usuwania budynku'
   }
@@ -152,7 +200,7 @@ async function handleSaveMaterial(data: BuildingMaterialFormData, file: File) {
     await uploadMaterial(clientId, materialBuilding.value.id, data, file, auth.user?.id)
     materialModalOpen.value = false
     materialBuilding.value = null
-    await fetchMaterials(clientId)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd dodawania materiału'
   }
@@ -169,10 +217,32 @@ async function handleDownloadMaterial(material: BuildingMaterial) {
 async function handleDeleteMaterial(material: BuildingMaterial) {
   if (!confirm(`Usunąć materiał „${material.title}"?`)) return
   try {
-    await deleteMaterial(material)
-    await fetchMaterials(clientId)
+    await deleteMaterial(material, auth.user?.id)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd usuwania materiału'
+  }
+}
+
+async function handleToggleChecklist(item: ChecklistItem) {
+  actionError.value = null
+  try {
+    await toggleChecklistItem(item, auth.user?.id)
+    await fetchChecklist(clientId)
+    await fetchActivityLog(clientId)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Błąd checklisty'
+  }
+}
+
+async function handleAddChecklist(buildingId: string, title: string) {
+  actionError.value = null
+  try {
+    await addChecklistItem(clientId, buildingId, title, auth.user?.id)
+    await fetchChecklist(clientId)
+    await fetchActivityLog(clientId)
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Błąd dodawania pozycji'
   }
 }
 
@@ -181,7 +251,7 @@ async function handleSaveCertificate(data: CertificateFormData, file: File) {
   try {
     await uploadCertificate(clientId, data, file, auth.user?.id)
     certModalOpen.value = false
-    await fetchCertificates(clientId)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd dodawania certyfikatu'
   }
@@ -198,10 +268,31 @@ async function handleDownloadCertificate(cert: Certificate) {
 async function handleDeleteCertificate(cert: Certificate) {
   if (!confirm('Usunąć ten certyfikat?')) return
   try {
-    await deleteCertificate(cert)
-    await fetchCertificates(clientId)
+    await deleteCertificate(cert, auth.user?.id)
+    await refreshClientData()
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : 'Błąd usuwania certyfikatu'
+  }
+}
+
+async function handleTogglePayment(cert: Certificate) {
+  actionError.value = null
+  const next: PaymentStatus = cert.payment_status === 'paid' ? 'pending' : 'paid'
+  try {
+    await updateCertificatePaymentStatus(cert.id, next, auth.user?.id)
+    await refreshClientData()
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Błąd zmiany płatności'
+  }
+}
+
+async function handleMarkPdfSent(cert: Certificate) {
+  actionError.value = null
+  try {
+    await markCertificatePdfSent(cert.id, auth.user?.id)
+    await refreshClientData()
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Błąd zapisu wysyłki PDF'
   }
 }
 
@@ -227,6 +318,7 @@ const tabs = [
   { id: 'dane' as const, label: 'Dane' },
   { id: 'budynki' as const, label: 'Budynki' },
   { id: 'certyfikaty' as const, label: 'Certyfikaty' },
+  { id: 'aktywnosc' as const, label: 'Aktywność' },
 ]
 </script>
 
@@ -247,7 +339,10 @@ const tabs = [
           <RouterLink :to="ROUTES.clients" class="text-sm text-brand-black/60 hover:underline">
             ← Klienci
           </RouterLink>
-          <h1 class="text-2xl font-semibold mt-2">{{ client.name }}</h1>
+          <div class="flex flex-wrap items-center gap-3 mt-2">
+            <h1 class="text-2xl font-semibold">{{ client.name }}</h1>
+            <OrderStatusBadge :status="client.order_status" />
+          </div>
         </div>
         <div class="flex flex-wrap gap-2">
           <RouterLink :to="ROUTES.clientEdit(client.id)">
@@ -280,7 +375,16 @@ const tabs = [
         </button>
       </div>
 
-      <div v-if="activeTab === 'dane'" class="border border-brand-black bg-brand-white p-6 space-y-4">
+      <div v-if="activeTab === 'dane'" class="border border-brand-black bg-brand-white p-6 space-y-6">
+        <div class="max-w-sm">
+          <OrderStatusSelect
+            :model-value="client.order_status"
+            :disabled="statusSaving"
+            @update:model-value="handleOrderStatusChange"
+          />
+          <p v-if="statusSaving" class="text-xs text-brand-black/60 mt-2">Zapisywanie...</p>
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <p class="text-xs text-brand-black/60 uppercase tracking-wide">Telefon</p>
@@ -301,6 +405,8 @@ const tabs = [
         <BuildingList
           :buildings="buildings"
           :materials-by-building="materialsByBuilding"
+          :checklist-items="checklistItems"
+          :checklist-loading="checklistLoading"
           :loading="buildingsLoading"
           @add="openAddBuilding"
           @edit="openEditBuilding"
@@ -308,6 +414,8 @@ const tabs = [
           @add-material="openAddMaterial"
           @download-material="handleDownloadMaterial"
           @delete-material="handleDeleteMaterial"
+          @toggle-checklist="handleToggleChecklist"
+          @add-checklist="handleAddChecklist"
         />
       </div>
 
@@ -318,8 +426,14 @@ const tabs = [
           @add="certModalOpen = true"
           @download="handleDownloadCertificate"
           @edit-cost="openEditCost"
+          @toggle-payment="handleTogglePayment"
+          @mark-pdf-sent="handleMarkPdfSent"
           @delete="handleDeleteCertificate"
         />
+      </div>
+
+      <div v-else-if="activeTab === 'aktywnosc'" class="border border-brand-black bg-brand-white p-6">
+        <ActivityTimeline :entries="activityEntries" :loading="activityLoading" />
       </div>
     </div>
 

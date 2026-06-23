@@ -4,6 +4,7 @@ defineProps<{
   label?: string
   id?: string
   required?: boolean
+  disabled?: boolean
 }>()
 
 defineEmits<{
@@ -21,7 +22,8 @@ defineEmits<{
       :id="id"
       :value="modelValue"
       :required="required"
-      class="w-full border border-brand-black bg-brand-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-black min-h-11"
+      :disabled="disabled"
+      class="w-full border border-brand-black bg-brand-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-black min-h-11 disabled:opacity-50"
       @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
     >
       <slot />

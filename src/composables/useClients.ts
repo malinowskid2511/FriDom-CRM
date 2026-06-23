@@ -2,7 +2,9 @@ import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { demoMode } from '@/lib/config'
 import { demoStore } from '@/lib/demo-store'
-import type { Client, ClientFormData } from '@/types'
+import { logActivity } from '@/lib/activity-log'
+import type { Client, ClientFormData, OrderStatus } from '@/types'
+import { ORDER_STATUS_LABELS } from '@/types'
 
 export function useClients() {
   const clients = ref<Client[]>([])
@@ -101,10 +103,18 @@ export function useClients() {
       .select()
       .single()
     if (createError) throw new Error(createError.message)
-    return data as Client
+    const client = data as Client
+    await logActivity({
+      clientId: client.id,
+      action: 'client_created',
+      description: `Dodano klienta: „${client.name}"`,
+      userId,
+      entityId: client.id,
+    })
+    return client
   }
 
-  async function updateClient(id: string, form: ClientFormData) {
+  async function updateClient(id: string, form: ClientFormData, userId?: string | null) {
     if (demoMode) return demoStore.updateClient(id, form)
     const { data, error: updateError } = await supabase
       .from('clients')
@@ -118,6 +128,36 @@ export function useClients() {
       .select()
       .single()
     if (updateError) throw new Error(updateError.message)
+    await logActivity({
+      clientId: id,
+      action: 'client_updated',
+      description: `Zaktualizowano dane klienta: „${form.name.trim()}"`,
+      userId,
+      entityId: id,
+    })
+    return data as Client
+  }
+
+  async function updateOrderStatus(id: string, status: OrderStatus, userId?: string | null) {
+    if (demoMode) return demoStore.updateOrderStatus(id, status, userId)
+
+    const { data, error: updateError } = await supabase
+      .from('clients')
+      .update({ order_status: status })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateError) throw new Error(updateError.message)
+
+    await logActivity({
+      clientId: id,
+      action: 'order_status_changed',
+      description: `Status zlecenia: ${ORDER_STATUS_LABELS[status]}`,
+      userId,
+      entityId: id,
+    })
+
     return data as Client
   }
 
@@ -144,6 +184,7 @@ export function useClients() {
     fetchClient,
     createClient,
     updateClient,
+    updateOrderStatus,
     deleteClient,
     getClientsCount,
   }

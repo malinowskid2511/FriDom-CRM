@@ -57,7 +57,7 @@ async function handleSubmit() {
 
   try {
     if (isEdit && clientId) {
-      await updateClient(clientId, form.value)
+      await updateClient(clientId, form.value, auth.user?.id)
       router.push(ROUTES.client(clientId))
     } else {
       const client = await createClient(form.value, auth.user?.id)
